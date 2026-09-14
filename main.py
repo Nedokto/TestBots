@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import os
 import sys
+import threading
 import traceback
-
+from flask import Flask
 import telebot
 from telebot import types
 
@@ -11,6 +12,24 @@ from automod import AutoModeration
 from commands import command_rows, dispatch, setup_callbacks
 from config import BOT_NAME, BOT_TOKEN, PARSE_MODE, TELEGRAM_COMMANDS, VERSION
 from database import Database
+
+# --- Flask Server for Keep-Alive on Render ---
+app = Flask(__name__)
+
+
+@app.route("/")
+def home():
+    return "Bot is alive!"
+
+
+def run_web_server():
+    # Render передает порт через переменную PORT (по умолчанию 10000)
+    port = int(os.environ.get("PORT", 10000))
+    # use_reloader=False обязателен при запуске Flask в отдельном потоке
+    app.run(host="0.0.0.0", port=port, use_reloader=False)
+
+
+# ---------------------------------------------
 
 
 def build_bot() -> telebot.TeleBot:
@@ -110,7 +129,6 @@ def register_telegram_menu():
             for command, description in TELEGRAM_COMMANDS
         ]
         bot.set_my_commands(commands)
-        # Необязательные команды можно дублировать для удобства.
     except Exception as exc:
         print(f"[MENU] Не удалось установить меню: {exc}")
 
@@ -120,6 +138,10 @@ def main():
     print(f"{BOT_NAME} v{VERSION}")
     print("Запуск Telegram-бота")
     print("=" * 50)
+
+    # Запускаем Flask в отдельном фоновом потоке
+    web_thread = threading.Thread(target=run_web_server, daemon=True)
+    web_thread.start()
 
     register_telegram_menu()
 
